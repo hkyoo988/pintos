@@ -34,6 +34,22 @@ static void
 process_init(void)
 {
 	struct thread *current = thread_current();
+
+	/* System call : file sys */
+	current->fdt = palloc_get_multiple(PAL_ZERO, 3);
+
+	if (!(current->fdt))
+	{
+		exit(-1);
+	}
+
+	for (int i = 0; i < FDT_SIZE; i++)
+	{
+		current->fdt[i] = NULL; // Initialize all file descriptors to NULL
+	}
+
+	current->fdt[0] = 1;
+	current->fdt[1] = 2;
 }
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
@@ -189,16 +205,31 @@ __do_fork(void *aux)
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
+	if(parent->nextfd == FDT_SIZE)
+		goto error;
+	process_init();
 
-	for (int i = 2; i < parent->nextfd; i++)
+	for (int i = 0; i < FDT_SIZE; i++)
 	{
 		struct file *file = parent->fdt[i];
 		if (file)
-			current->fdt[i] = file_duplicate(file);
+		{
+			if ((int *)file == 1)
+			{
+				current->fdt[i] = 1;
+			}
+			else if ((int *)file == 2)
+			{
+				current->fdt[i] = 2;
+			}
+			else
+			{
+				current->fdt[i] = file_duplicate(file);
+			}
+		}
 	}
 	current->nextfd = parent->nextfd;
 
-	process_init();
 	sema_up(&current->sema_fork);
 	/* Finally, switch to the newly created process. */
 	if (succ)
@@ -280,13 +311,21 @@ void process_exit(void)
 {
 	struct thread *curr = thread_current();
 	/* file descriptors close */
-	for (int i = 2; i < FDT_SIZE; i++)
+	if (curr->fdt)
 	{
-		file_close(curr->fdt[i]);
+		for (int i = 0; i < FDT_SIZE; i++)
+		{
+			if (curr->fdt[i] == 1 || curr->fdt[i] == 2)
+			{
+				continue;
+			}
+			file_close(curr->fdt[i]);
+		}
 	}
 	// palloc_free_multiple(curr->fdt, FDT_SIZE);
 	/* running file close*/
 	file_close(curr->running_file);
+	palloc_free_multiple(curr->fdt, 3);
 	process_cleanup();
 
 	for (struct list_elem *p = list_begin(&curr->childs); p != list_end(&curr->childs); p = p->next)

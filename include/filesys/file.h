@@ -27,4 +27,8 @@ void file_seek (struct file *, off_t);
 off_t file_tell (struct file *);
 off_t file_length (struct file *);
 
+/* custom procedure */
+int get_dup_count(struct file *p);
+void decrease_dup_count(struct file *p);
+
 #endif /* filesys/file.h */

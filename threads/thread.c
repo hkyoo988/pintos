@@ -449,11 +449,7 @@ init_thread(struct thread *t, const char *name, int priority)
 	sema_init(&t->sema_fork, 0);
 	list_init(&t->childs);
 
-	/* System call : file sys */
-	for (int i = 0; i < FDT_SIZE; i++)
-	{
-		t->fdt[i] = NULL; // Initialize all file descriptors to NULL
-	}
+	t->fdt = NULL;
 
 	t->nextfd = 2; // start of user process file descriptor
 

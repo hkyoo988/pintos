@@ -10,6 +10,7 @@
 #include "threads/flags.h"
 #include "threads/synch.h"
 #include "intrinsic.h"
+#include "../include/filesys/file.h"
 
 void syscall_entry(void);
 void syscall_handler(struct intr_frame *);
@@ -27,6 +28,7 @@ int filesize(int fd);
 int write(int fd, void *buffer, unsigned size);
 unsigned tell(int fd);
 void seek(int fd, unsigned position);
+int dup2(int oldfd, int newfd);
 
 struct lock fd_lock;
 
@@ -121,6 +123,9 @@ void syscall_handler(struct intr_frame *f)
 		case SYS_CLOSE:
 			close(f->R.rdi);
 			break;
+		case SYS_DUP2:
+			f->R.rax = dup2(f->R.rdi, f->R.rsi);
+			break;
 		}
 	}
 	else
@@ -207,7 +212,7 @@ int open(const char *file_name)
 
 	int current_fd = curr->nextfd;
 
-	for (int i = 2; i < FDT_SIZE; i++)
+	for (int i = 0; i < FDT_SIZE; i++)
 	{
 		if (curr->fdt[i] == NULL)
 		{
@@ -231,10 +236,21 @@ void close(int fd)
 	}
 
 	// 1. fdt[fd] 에 담긴 값을 free
-	file_close(curr->fdt[fd]);
+	if (!curr->fdt[fd] == 1 && !curr->fdt[fd] == 2)
+	{
+		file_close(curr->fdt[fd]);
+	}
 
 	// 2. fdt[fd] NULL
 	curr->fdt[fd] = NULL;
+
+	for (int i = 0; i < FDT_SIZE; i++)
+	{
+		if (curr->fdt[i] == NULL)
+		{
+			curr->nextfd = i;
+		}
+	}
 }
 
 int read(int fd, void *buffer, unsigned size)
@@ -243,13 +259,13 @@ int read(int fd, void *buffer, unsigned size)
 
 	struct thread *curr = thread_current();
 
-	if (fd == 0)
+	if (curr->fdt[fd] == 1)
 	{
 		return input_getc();
 	}
 	else
 	{
-		if (FDT_SIZE <= fd || fd < 0 || curr->fdt[fd] == NULL)
+		if (FDT_SIZE <= fd || fd < 0 || curr->fdt[fd] == NULL || curr->fdt[fd] == 2)
 		{
 			exit(-1);
 		}
@@ -264,7 +280,7 @@ int filesize(int fd)
 {
 	struct thread *curr = thread_current();
 
-	if (FDT_SIZE <= fd || fd < 2 || curr->fdt[fd] == NULL)
+	if (FDT_SIZE <= fd || fd < 0 || curr->fdt[fd] == NULL || curr->fdt[fd] == 1 || curr->fdt[fd] == 2)
 	{
 		exit(-1);
 	}
@@ -277,13 +293,13 @@ int write(int fd, void *buffer, unsigned size)
 {
 	check_address(buffer);
 
-	if (fd == 1)
+	struct thread *curr = thread_current();
+
+	if (curr->fdt[fd] == 2)
 	{
 		putbuf(buffer, size);
 		return size;
 	}
-
-	struct thread *curr = thread_current();
 
 	if (FDT_SIZE <= fd || fd < 2 || curr->fdt[fd] == NULL)
 	{
@@ -312,4 +328,76 @@ void seek(int fd, unsigned position)
 	struct thread *curr = thread_current();
 	if (curr->fdt[fd] && position >= 0)
 		file_seek(curr->fdt[fd], position);
+}
+
+int dup2(int oldfd, int newfd)
+{
+	struct thread *curr = thread_current();
+
+	if (curr->fdt[oldfd] == 1)
+	{
+		if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+		{
+			decrease_dup_count(curr->fdt[newfd]);
+		}
+		else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+		{
+			file_close(newfd);
+		}
+
+		curr->fdt[newfd] = 1;
+		return newfd;
+	}
+	else if (curr->fdt[oldfd] == 2)
+	{
+		if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+		{
+			decrease_dup_count(curr->fdt[newfd]);
+		}
+		else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+		{
+			file_close(newfd);
+		}
+
+		curr->fdt[newfd] = 2;
+		return newfd;
+	}
+
+	// 예외처리
+	if (!curr->fdt[oldfd] || FDT_SIZE <= oldfd || FDT_SIZE <= newfd || oldfd < 0 || newfd < 0)
+	{
+		return 1;
+	}
+
+	// 이미 dup2 가 된 oldfd, newfd 가 parameter 로 들어오면 그대로 newfd 반환
+	if (curr->fdt[oldfd] == curr->fdt[newfd])
+	{
+		return newfd;
+	}
+
+	// newfd 가 들어오려고 하는 자리가, 이미 이전 dup2 를 통해서 하나의 파일을 두 fd 가 가리키고 있는 상태라면
+	// newfd 에 이미 존재하는 fd 를 덮어쓰지만, file 을 close 하지 않고 file 의 dup_count 만 감소해줌
+	if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+	{
+		decrease_dup_count(curr->fdt[newfd]);
+	}
+	else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+	{
+		file_close(newfd);
+	}
+
+	curr->fdt[newfd] = curr->fdt[oldfd];
+
+	for (int i = 0; i < FDT_SIZE; i++)
+	{
+		if (curr->fdt[i] == NULL)
+		{
+			curr->nextfd = i;
+			return newfd;
+		}
+	}
+
+	curr->nextfd = FDT_SIZE;
+
+	return newfd;
 }
