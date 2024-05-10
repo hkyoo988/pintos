@@ -30,5 +30,7 @@ off_t file_length (struct file *);
 /* custom procedure */
 int get_dup_count(struct file *p);
 void decrease_dup_count(struct file *p);
+void increase_dup_count(struct file *p);
+void set_dup_count(struct file *p, int dup_count);
 
 #endif /* filesys/file.h */

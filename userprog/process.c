@@ -205,7 +205,7 @@ __do_fork(void *aux)
 	if (!pml4_for_each(parent->pml4, duplicate_pte, parent))
 		goto error;
 #endif
-	if(parent->nextfd == FDT_SIZE)
+	if (parent->nextfd == FDT_SIZE)
 		goto error;
 	process_init();
 
@@ -224,7 +224,30 @@ __do_fork(void *aux)
 			}
 			else
 			{
-				current->fdt[i] = file_duplicate(file);
+				if (get_dup_count(file) == 0)
+				{
+					current->fdt[i] = file_duplicate(file);
+					set_dup_count(current->fdt[i], 0);
+				}
+				else
+				{
+					int dup_count = get_dup_count(file);
+
+					if (!current->fdt[i] || (int *)current->fdt[i] == 1 || (int *)current->fdt[i] == 2) {
+						struct file *duplicated_file = file_duplicate(file);
+						set_dup_count(duplicated_file, dup_count);
+						current->fdt[i] = duplicated_file;
+						for(int j = i + 1; j < FDT_SIZE; j++) {
+							if (parent->fdt[j] == file) {
+								current->fdt[j] = duplicated_file;
+								dup_count--;
+							}
+							if (dup_count == 0) {
+								break;
+							}
+						}
+					} 
+				}
 			}
 		}
 	}
@@ -315,11 +338,19 @@ void process_exit(void)
 	{
 		for (int i = 0; i < FDT_SIZE; i++)
 		{
-			if (curr->fdt[i] == 1 || curr->fdt[i] == 2)
+			if (curr->fdt[i] == 1 || curr->fdt[i] == 2 || curr->fdt[i] == NULL)
 			{
 				continue;
 			}
-			file_close(curr->fdt[i]);
+
+			if (get_dup_count(curr->fdt[i]) == 0)
+			{
+				file_close(curr->fdt[i]);
+			}
+			else
+			{
+				decrease_dup_count(curr->fdt[i]);
+			}
 		}
 	}
 	// palloc_free_multiple(curr->fdt, FDT_SIZE);

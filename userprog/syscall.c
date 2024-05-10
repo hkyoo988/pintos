@@ -236,9 +236,16 @@ void close(int fd)
 	}
 
 	// 1. fdt[fd] 에 담긴 값을 free
-	if (!curr->fdt[fd] == 1 && !curr->fdt[fd] == 2)
+	if (curr->fdt[fd] != 1 && curr->fdt[fd] != 2)
 	{
-		file_close(curr->fdt[fd]);
+		if (get_dup_count(curr->fdt[fd]) > 0)
+		{
+			decrease_dup_count(curr->fdt[fd]);
+		}
+		else
+		{
+			file_close(curr->fdt[fd]);
+		}
 	}
 
 	// 2. fdt[fd] NULL
@@ -249,6 +256,7 @@ void close(int fd)
 		if (curr->fdt[i] == NULL)
 		{
 			curr->nextfd = i;
+			break;
 		}
 	}
 }
@@ -301,7 +309,7 @@ int write(int fd, void *buffer, unsigned size)
 		return size;
 	}
 
-	if (FDT_SIZE <= fd || fd < 2 || curr->fdt[fd] == NULL)
+	if (FDT_SIZE <= fd || fd < 0 || curr->fdt[fd] == NULL)
 	{
 		exit(-1);
 	}
@@ -315,58 +323,28 @@ unsigned tell(int fd)
 {
 	struct thread *curr = thread_current();
 
-	if (FDT_SIZE <= fd || fd < 2 || curr->fdt[fd] == NULL)
+	if (FDT_SIZE <= fd || fd < 0 || curr->fdt[fd] == NULL)
 	{
 		exit(-1);
 	}
 
-	return file_tell(fd);
+	return file_tell(curr->fdt[fd]);
 }
 
 void seek(int fd, unsigned position)
 {
 	struct thread *curr = thread_current();
-	if (curr->fdt[fd] && position >= 0)
+	if (curr->fdt[fd] && position >= 0 && curr->fdt[fd] != 1 && curr->fdt[fd] != 2)
 		file_seek(curr->fdt[fd], position);
 }
 
 int dup2(int oldfd, int newfd)
 {
 	struct thread *curr = thread_current();
-
-	if (curr->fdt[oldfd] == 1)
-	{
-		if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
-		{
-			decrease_dup_count(curr->fdt[newfd]);
-		}
-		else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
-		{
-			file_close(newfd);
-		}
-
-		curr->fdt[newfd] = 1;
-		return newfd;
-	}
-	else if (curr->fdt[oldfd] == 2)
-	{
-		if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
-		{
-			decrease_dup_count(curr->fdt[newfd]);
-		}
-		else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
-		{
-			file_close(newfd);
-		}
-
-		curr->fdt[newfd] = 2;
-		return newfd;
-	}
-
 	// 예외처리
-	if (!curr->fdt[oldfd] || FDT_SIZE <= oldfd || FDT_SIZE <= newfd || oldfd < 0 || newfd < 0)
+	if (oldfd < 0 || newfd < 0 || !curr->fdt[oldfd] || FDT_SIZE <= oldfd || FDT_SIZE <= newfd)
 	{
-		return 1;
+		return -1;
 	}
 
 	// 이미 dup2 가 된 oldfd, newfd 가 parameter 로 들어오면 그대로 newfd 반환
@@ -375,17 +353,53 @@ int dup2(int oldfd, int newfd)
 		return newfd;
 	}
 
+	if (curr->fdt[oldfd] == 1)
+	{
+		if (curr->fdt[newfd] != 2)
+		{
+			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+			{
+				decrease_dup_count(curr->fdt[newfd]);
+			}
+			else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+			{
+				file_close(curr->fdt[newfd]);
+			}
+		}
+
+		curr->fdt[newfd] = 1;
+		return newfd;
+	}
+	else if (curr->fdt[oldfd] == 2)
+	{
+		if (curr->fdt[newfd] != 1)
+		{
+			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+			{
+				decrease_dup_count(curr->fdt[newfd]);
+			}
+			else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+			{
+				file_close(curr->fdt[newfd]);
+			}
+		}
+
+		curr->fdt[newfd] = 2;
+		return newfd;
+	}
+
 	// newfd 가 들어오려고 하는 자리가, 이미 이전 dup2 를 통해서 하나의 파일을 두 fd 가 가리키고 있는 상태라면
 	// newfd 에 이미 존재하는 fd 를 덮어쓰지만, file 을 close 하지 않고 file 의 dup_count 만 감소해줌
-	if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
+	if (curr->fdt[newfd] && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2 && get_dup_count(curr->fdt[newfd]))
 	{
 		decrease_dup_count(curr->fdt[newfd]);
 	}
-	else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+	else if (curr->fdt[newfd] != NULL && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2) // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
 	{
-		file_close(newfd);
+		file_close(curr->fdt[newfd]);
 	}
 
+	increase_dup_count(curr->fdt[oldfd]);
 	curr->fdt[newfd] = curr->fdt[oldfd];
 
 	for (int i = 0; i < FDT_SIZE; i++)

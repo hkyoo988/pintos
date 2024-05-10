@@ -17,9 +17,19 @@ int get_dup_count(struct file *p)
 	return p->dup_count;
 }
 
-void decrease_dup_count(struct file *p)
+void  decrease_dup_count(struct file *p)
 {
 	p->dup_count--;
+}
+
+void increase_dup_count(struct file *p)
+{
+	p->dup_count++;
+}
+
+void set_dup_count(struct file *p, int dup_count)
+{
+	p->dup_count = dup_count;
 }
 
 /* Opens a file for the given INODE, of which it takes ownership,
