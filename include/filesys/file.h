@@ -2,8 +2,12 @@
 #define FILESYS_FILE_H
 
 #include "filesys/off_t.h"
+#include "stdbool.h"
 
 struct inode;
+
+extern struct file;
+extern struct fdt_file;
 
 /* Opening and closing files. */
 struct file *file_open (struct inode *);
@@ -28,9 +32,11 @@ off_t file_tell (struct file *);
 off_t file_length (struct file *);
 
 /* custom procedure */
-int get_dup_count(struct file *p);
-void decrease_dup_count(struct file *p);
-void increase_dup_count(struct file *p);
-void set_dup_count(struct file *p, int dup_count);
+int get_dup_count(struct fdt_file *p);
+void decrease_dup_count(struct fdt_file *p);
+void increase_dup_count(struct fdt_file *p);
+void set_dup_count(struct fdt_file *p, int dup_count);
+void set_file (struct fdt_file *p, struct file *file);
+struct file *get_file (struct fdt_file *p);
 
 #endif /* filesys/file.h */

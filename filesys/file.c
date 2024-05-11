@@ -8,28 +8,45 @@ struct file
 {
 	struct inode *inode; /* File's inode. */
 	off_t pos;			 /* Current position. */
-	bool deny_write; /* Has file_deny_write() been called? */
+	bool deny_write;	 /* Has file_deny_write() been called? */
+};
+
+struct fdt_file
+{
+	struct file *file;
 	int dup_count;
 };
 
-int get_dup_count(struct file *p)
+int get_dup_count(struct fdt_file *p)
 {
 	return p->dup_count;
 }
 
-void  decrease_dup_count(struct file *p)
+void decrease_dup_count(struct fdt_file *p)
 {
 	p->dup_count--;
 }
 
-void increase_dup_count(struct file *p)
+void increase_dup_count(struct fdt_file *p)
 {
 	p->dup_count++;
 }
 
-void set_dup_count(struct file *p, int dup_count)
+void set_dup_count(struct fdt_file *p, int dup_count)
 {
 	p->dup_count = dup_count;
+}
+
+void set_file (struct fdt_file *p, struct file *file) {
+	p->file = file;
+	p->dup_count = 0;
+}
+
+struct file *get_file (struct fdt_file *p) {
+	if ((int *)p == 1 || (int *)p == 2 || p == NULL) {
+		return p;
+	}
+	return p->file;
 }
 
 /* Opens a file for the given INODE, of which it takes ownership,
