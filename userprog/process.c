@@ -209,6 +209,7 @@ __do_fork(void *aux)
 		goto error;
 	process_init();
 
+	/* 파일 디스크립터 테이블 복제 */
 	for (int i = 0; i < FDT_SIZE; i++)
 	{
 		struct file *file = get_file(parent->fdt[i]);
@@ -222,11 +223,11 @@ __do_fork(void *aux)
 
 		if (file)
 		{
-			if ((int *)file == 1)
+			if (file == 1)
 			{
 				current->fdt[i] = 1;
 			}
-			else if ((int *)file == 2)
+			else if (file == 2)
 			{
 				current->fdt[i] = 2;
 			}

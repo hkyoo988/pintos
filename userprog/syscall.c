@@ -201,16 +201,21 @@ int open(const char *file_name)
 		return -1;
 	}
 
+	// open file
 	struct file *_file = filesys_open(file_name);
+
+	// fdt_file 을 위한 메모리 할당
 	struct fdt_file *_fdt_file = malloc(FDT_FILE_SIZE);
 
 	if (_file == NULL || _fdt_file == NULL)
 	{
 		return -1;
 	}
-	set_file(_fdt_file, _file);
-	set_dup_count(_fdt_file, 0);
 
+	// fdt_file 에 file 초기화
+	set_file(_fdt_file, _file);
+
+	// fdt_file 을 fdt 에 할당
 	curr->fdt[curr->nextfd] = _fdt_file;
 
 	int current_fd = curr->nextfd;
@@ -346,17 +351,19 @@ int dup2(int oldfd, int newfd)
 {
 	struct thread *curr = thread_current();
 	// 예외처리
-	if (oldfd < 0 || newfd < 0 || !curr->fdt[oldfd] || FDT_SIZE <= oldfd || FDT_SIZE <= newfd)
+	if (oldfd < 0 || newfd < 0 || FDT_SIZE <= oldfd || FDT_SIZE <= newfd || !curr->fdt[oldfd])
 	{
 		return -1;
 	}
 
+	if (curr->fdt[oldfd] == curr->fdt[newfd])
+	{
+		return newfd;
+	}
+
 	if (curr->fdt[oldfd] == 1)
 	{
-		if (curr->fdt[oldfd] == curr->fdt[newfd])
-		{
-			return newfd;
-		}
+
 		if (curr->fdt[newfd] != 2)
 		{
 			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
@@ -375,10 +382,6 @@ int dup2(int oldfd, int newfd)
 	}
 	else if (curr->fdt[oldfd] == 2)
 	{
-		if (curr->fdt[oldfd] == curr->fdt[newfd])
-		{
-			return newfd;
-		}
 		if (curr->fdt[newfd] != 1)
 		{
 			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
@@ -396,19 +399,13 @@ int dup2(int oldfd, int newfd)
 		return newfd;
 	}
 
-	// 이미 dup2 가 된 oldfd, newfd 가 parameter 로 들어오면 그대로 newfd 반환
-	if (get_file(curr->fdt[oldfd]) == get_file(curr->fdt[newfd]))
-	{
-		return newfd;
-	}
-
 	// newfd 가 들어오려고 하는 자리가, 이미 이전 dup2 를 통해서 하나의 파일을 두 fd 가 가리키고 있는 상태라면
 	// newfd 에 이미 존재하는 fd 를 덮어쓰지만, file 을 close 하지 않고 file 의 dup_count 만 감소해줌
 	if (curr->fdt[newfd] && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2 && get_dup_count(curr->fdt[newfd]))
 	{
 		decrease_dup_count(curr->fdt[newfd]);
 	}
-	else if (curr->fdt[newfd] != NULL && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2) // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
+	else if (curr->fdt[newfd] && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2) // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
 	{
 		file_close(get_file(curr->fdt[newfd]));
 		free(curr->fdt[newfd]);
