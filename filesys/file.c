@@ -11,37 +11,44 @@ struct file
 	bool deny_write;	 /* Has file_deny_write() been called? */
 };
 
+// dup_count 를 추가하기 위해 생성한 fdt_file structure
 struct fdt_file
 {
 	struct file *file;
 	int dup_count;
 };
 
+// file의 dup_count 를 반환하는 프로시저
 int get_dup_count(struct fdt_file *p)
 {
 	return p->dup_count;
 }
 
+// file의 dup_count 를 감소하는 프로시저
 void decrease_dup_count(struct fdt_file *p)
 {
 	p->dup_count--;
 }
 
+// file의 dup_count 를 증가하는 프로시저
 void increase_dup_count(struct fdt_file *p)
 {
 	p->dup_count++;
 }
 
+// 해당 file의 dup_count를 설정하는 프로시저
 void set_dup_count(struct fdt_file *p, int dup_count)
 {
 	p->dup_count = dup_count;
 }
 
+// fdt_file structure 를 초기화하는 프로시저
 void set_file (struct fdt_file *p, struct file *file) {
 	p->file = file;
 	p->dup_count = 0;
 }
 
+// fdt_file structure 의 file 을 반환하는 프로시저
 struct file *get_file (struct fdt_file *p) {
 	if ((int *)p == 1 || (int *)p == 2 || p == NULL) {
 		return p;

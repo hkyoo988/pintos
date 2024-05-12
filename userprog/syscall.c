@@ -202,15 +202,19 @@ int open(const char *file_name)
 	}
 
 	struct file *_file = filesys_open(file_name);
-	struct fdt_file *_fdt_file = malloc(FDT_FILE_SIZE);
 
+	// fdt_file 을 위한 메모리 할당
+	struct fdt_file *_fdt_file = malloc(FDT_FILE_SIZE);
 	if (_file == NULL || _fdt_file == NULL)
 	{
 		return -1;
 	}
+
+	// fdt_file 을 초기화
 	set_file(_fdt_file, _file);
 	set_dup_count(_fdt_file, 0);
 
+	// fdt_file 을 nextfd 로 저장
 	curr->fdt[curr->nextfd] = _fdt_file;
 
 	int current_fd = curr->nextfd;
@@ -238,7 +242,9 @@ void close(int fd)
 		exit(-1);
 	}
 
-	// 1. fdt[fd] 에 담긴 값을 free
+	/* stdin 과 stdout이 아닐 때
+	   1. dup_count 가 0이면 바로 file 과 fdt_file 의 memory free
+	   2. dup_count 가 0 이상이면 dup_count 감소*/
 	if (curr->fdt[fd] != 1 && curr->fdt[fd] != 2)
 	{
 		if (get_dup_count(curr->fdt[fd]) > 0)
@@ -252,7 +258,7 @@ void close(int fd)
 		}
 	}
 
-	// 2. fdt[fd] NULL
+	// fdt[fd] NULL
 	curr->fdt[fd] = NULL;
 
 	for (int i = 0; i < FDT_SIZE; i++)
@@ -351,6 +357,7 @@ int dup2(int oldfd, int newfd)
 		return -1;
 	}
 
+	// 1. fd 가 가리키는 값이 1일 때
 	if (curr->fdt[oldfd] == 1)
 	{
 		if (curr->fdt[oldfd] == curr->fdt[newfd])
@@ -373,6 +380,7 @@ int dup2(int oldfd, int newfd)
 		curr->fdt[newfd] = 1;
 		return newfd;
 	}
+	// 2. fd 가 가리키는 값이 2일 때
 	else if (curr->fdt[oldfd] == 2)
 	{
 		if (curr->fdt[oldfd] == curr->fdt[newfd])

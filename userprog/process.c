@@ -209,20 +209,21 @@ __do_fork(void *aux)
 		goto error;
 	process_init();
 
+	// 부모의 fdt 의 semantic 을 자식의 fdt에 복제
 	for (int i = 0; i < FDT_SIZE; i++)
-	{
+	{	
 		struct file *file = get_file(parent->fdt[i]);
 		struct fdt_file *fdt_file = parent->fdt[i];
 
-		struct fdt_file *new_fdt_file = malloc(FDT_FILE_SIZE);
+		struct fdt_file *new_fdt_file = malloc(FDT_FILE_SIZE); // fdt_file structure 를 위한 메모리 할당
 		if (new_fdt_file == NULL)
 		{
 			exit(-1);
 		}
 
 		if (file)
-		{
-			if ((int *)file == 1)
+		{	// file 이 1 or 2 
+			if ((int *)file == 1) 
 			{
 				current->fdt[i] = 1;
 			}
@@ -231,7 +232,7 @@ __do_fork(void *aux)
 				current->fdt[i] = 2;
 			}
 			else
-			{
+			{	// dup_ count 가 0 이면 해당 file duplicate
 				if (get_dup_count(fdt_file) == 0)
 				{
 					set_file(new_fdt_file, file_duplicate(file));
@@ -240,9 +241,9 @@ __do_fork(void *aux)
 					current->fdt[i] = new_fdt_file;
 				}
 				else
-				{
+				{	// dup_count 가 1 이상이면 첫번째는 duplicate하고 dup_count만큼 찾고, duplicated_file 을 가리키게 함
 					int dup_count = get_dup_count(fdt_file);
-
+					// 자식의 fdt 에서 fd의 자리가 빈 공간이면 duplicated_file 을 fd[i] 에 저장
 					if (!current->fdt[i] || (int *)current->fdt[i] == 1 || (int *)current->fdt[i] == 2)
 					{
 						struct file *duplicated_file = file_duplicate(file);
@@ -250,14 +251,14 @@ __do_fork(void *aux)
 
 						set_dup_count(new_fdt_file, dup_count);
 						current->fdt[i] = new_fdt_file;
-						for (int j = i + 1; j < FDT_SIZE; j++)
+						for (int j = i + 1; j < FDT_SIZE; j++) // i+1부터 dup_count 만큼 동일한 fdt_file 을 찾고 자식의 fdt[j] 에 해당 파일 저장
 						{
 							if (get_file(parent->fdt[j]) == file)
 							{
 								current->fdt[j] = new_fdt_file;
 								dup_count--;
 							}
-							if (dup_count == 0)
+							if (dup_count == 0) // 다 찾았으면 break
 							{
 								break;
 							}
@@ -359,14 +360,14 @@ void process_exit(void)
 				continue;
 			}
 
-			if (get_dup_count(curr->fdt[i]) == 0)
+			if (get_dup_count(curr->fdt[i]) == 0) // dup_count 가 0 이면 바로 파일을 닫고 해당 fdt_file structure 의 메모리도 free
 			{
 				file_close(get_file(curr->fdt[i]));
 				free(curr->fdt[i]);
 			}
 			else
 			{
-				decrease_dup_count(curr->fdt[i]);
+				decrease_dup_count(curr->fdt[i]); // dup_count 가 1 이상이면 dup_count 만 감소
 			}
 		}
 	}
