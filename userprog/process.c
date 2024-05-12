@@ -211,7 +211,15 @@ __do_fork(void *aux)
 
 	for (int i = 0; i < FDT_SIZE; i++)
 	{
-		struct file *file = parent->fdt[i];
+		struct file *file = get_file(parent->fdt[i]);
+		struct fdt_file *fdt_file = parent->fdt[i];
+
+		struct fdt_file *new_fdt_file = malloc(FDT_FILE_SIZE);
+		if (new_fdt_file == NULL)
+		{
+			exit(-1);
+		}
+
 		if (file)
 		{
 			if ((int *)file == 1)
@@ -224,29 +232,37 @@ __do_fork(void *aux)
 			}
 			else
 			{
-				if (get_dup_count(file) == 0)
+				if (get_dup_count(fdt_file) == 0)
 				{
-					current->fdt[i] = file_duplicate(file);
-					set_dup_count(current->fdt[i], 0);
+					set_file(new_fdt_file, file_duplicate(file));
+					set_dup_count(new_fdt_file, 0);
+
+					current->fdt[i] = new_fdt_file;
 				}
 				else
 				{
-					int dup_count = get_dup_count(file);
+					int dup_count = get_dup_count(fdt_file);
 
-					if (!current->fdt[i] || (int *)current->fdt[i] == 1 || (int *)current->fdt[i] == 2) {
+					if (!current->fdt[i] || (int *)current->fdt[i] == 1 || (int *)current->fdt[i] == 2)
+					{
 						struct file *duplicated_file = file_duplicate(file);
-						set_dup_count(duplicated_file, dup_count);
-						current->fdt[i] = duplicated_file;
-						for(int j = i + 1; j < FDT_SIZE; j++) {
-							if (parent->fdt[j] == file) {
-								current->fdt[j] = duplicated_file;
+						set_file(new_fdt_file, duplicated_file);
+
+						set_dup_count(new_fdt_file, dup_count);
+						current->fdt[i] = new_fdt_file;
+						for (int j = i + 1; j < FDT_SIZE; j++)
+						{
+							if (get_file(parent->fdt[j]) == file)
+							{
+								current->fdt[j] = new_fdt_file;
 								dup_count--;
 							}
-							if (dup_count == 0) {
+							if (dup_count == 0)
+							{
 								break;
 							}
 						}
-					} 
+					}
 				}
 			}
 		}
@@ -345,7 +361,8 @@ void process_exit(void)
 
 			if (get_dup_count(curr->fdt[i]) == 0)
 			{
-				file_close(curr->fdt[i]);
+				file_close(get_file(curr->fdt[i]));
+				free(curr->fdt[i]);
 			}
 			else
 			{

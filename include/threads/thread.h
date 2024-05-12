@@ -22,14 +22,15 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
-#define TID_ERROR ((tid_t)-1) /* Error value for tid_t. */
+#define TID_ERROR ((tid_t) - 1) /* Error value for tid_t. */
 
 /* Thread priorities. */
 #define PRI_MIN 0	   /* Lowest priority. */
 #define PRI_DEFAULT 31 /* Default priority. */
 #define PRI_MAX 63	   /* Highest priority. */
-#define FDT_PAGES 3
-#define FDT_SIZE FDT_PAGES * (PGSIZE / 8)   // file descriptor size: stdin + stdout + 128
+#define FDT_PAGES 2
+#define FDT_SIZE FDT_PAGES *(PGSIZE / 8) // file descriptor size: stdin + stdout + 128
+#define FDT_FILE_SIZE 12
 
 /* A kernel thread or user process.
  *
@@ -116,7 +117,7 @@ struct thread
 	struct file *running_file;
 
 	/* system-call : filesys */
-	struct file **fdt;
+	struct fdt_file **fdt;
 	int nextfd;
 
 	/* System call : exit() */

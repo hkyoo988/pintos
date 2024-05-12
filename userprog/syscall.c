@@ -202,13 +202,16 @@ int open(const char *file_name)
 	}
 
 	struct file *_file = filesys_open(file_name);
+	struct fdt_file *_fdt_file = malloc(FDT_FILE_SIZE);
 
-	if (_file == NULL)
+	if (_file == NULL || _fdt_file == NULL)
 	{
 		return -1;
 	}
+	set_file(_fdt_file, _file);
+	set_dup_count(_fdt_file, 0);
 
-	curr->fdt[curr->nextfd] = _file;
+	curr->fdt[curr->nextfd] = _fdt_file;
 
 	int current_fd = curr->nextfd;
 
@@ -244,7 +247,8 @@ void close(int fd)
 		}
 		else
 		{
-			file_close(curr->fdt[fd]);
+			file_close(get_file(curr->fdt[fd]));
+			free(curr->fdt[fd]);
 		}
 	}
 
@@ -278,7 +282,7 @@ int read(int fd, void *buffer, unsigned size)
 			exit(-1);
 		}
 		lock_acquire(&fd_lock);
-		int cnt = file_read(curr->fdt[fd], buffer, size);
+		int cnt = file_read(get_file(curr->fdt[fd]), buffer, size);
 		lock_release(&fd_lock);
 		return cnt;
 	}
@@ -292,7 +296,7 @@ int filesize(int fd)
 	{
 		exit(-1);
 	}
-	int length = file_length(curr->fdt[fd]);
+	int length = file_length(get_file(curr->fdt[fd]));
 
 	return length;
 }
@@ -314,7 +318,7 @@ int write(int fd, void *buffer, unsigned size)
 		exit(-1);
 	}
 	lock_acquire(&fd_lock);
-	int cnt = file_write(curr->fdt[fd], buffer, size);
+	int cnt = file_write(get_file(curr->fdt[fd]), buffer, size);
 	lock_release(&fd_lock);
 	return cnt;
 }
@@ -328,14 +332,14 @@ unsigned tell(int fd)
 		exit(-1);
 	}
 
-	return file_tell(curr->fdt[fd]);
+	return file_tell(get_file(curr->fdt[fd]));
 }
 
 void seek(int fd, unsigned position)
 {
 	struct thread *curr = thread_current();
 	if (curr->fdt[fd] && position >= 0 && curr->fdt[fd] != 1 && curr->fdt[fd] != 2)
-		file_seek(curr->fdt[fd], position);
+		file_seek(get_file(curr->fdt[fd]), position);
 }
 
 int dup2(int oldfd, int newfd)
@@ -347,14 +351,12 @@ int dup2(int oldfd, int newfd)
 		return -1;
 	}
 
-	// 이미 dup2 가 된 oldfd, newfd 가 parameter 로 들어오면 그대로 newfd 반환
-	if (curr->fdt[oldfd] == curr->fdt[newfd])
-	{
-		return newfd;
-	}
-
 	if (curr->fdt[oldfd] == 1)
 	{
+		if (curr->fdt[oldfd] == curr->fdt[newfd])
+		{
+			return newfd;
+		}
 		if (curr->fdt[newfd] != 2)
 		{
 			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
@@ -363,7 +365,8 @@ int dup2(int oldfd, int newfd)
 			}
 			else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
 			{
-				file_close(curr->fdt[newfd]);
+				file_close(get_file(curr->fdt[newfd]));
+				free(curr->fdt[newfd]);
 			}
 		}
 
@@ -372,6 +375,10 @@ int dup2(int oldfd, int newfd)
 	}
 	else if (curr->fdt[oldfd] == 2)
 	{
+		if (curr->fdt[oldfd] == curr->fdt[newfd])
+		{
+			return newfd;
+		}
 		if (curr->fdt[newfd] != 1)
 		{
 			if (curr->fdt[newfd] && get_dup_count(curr->fdt[newfd]))
@@ -380,11 +387,18 @@ int dup2(int oldfd, int newfd)
 			}
 			else // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
 			{
-				file_close(curr->fdt[newfd]);
+				file_close(get_file(curr->fdt[newfd]));
+				free(curr->fdt[newfd]);
 			}
 		}
 
 		curr->fdt[newfd] = 2;
+		return newfd;
+	}
+
+	// 이미 dup2 가 된 oldfd, newfd 가 parameter 로 들어오면 그대로 newfd 반환
+	if (get_file(curr->fdt[oldfd]) == get_file(curr->fdt[newfd]))
+	{
 		return newfd;
 	}
 
@@ -396,7 +410,8 @@ int dup2(int oldfd, int newfd)
 	}
 	else if (curr->fdt[newfd] != NULL && curr->fdt[newfd] != 1 && curr->fdt[newfd] != 2) // dup_count 가 0 이라면, 살려둘 필요가 없으므로 close
 	{
-		file_close(curr->fdt[newfd]);
+		file_close(get_file(curr->fdt[newfd]));
+		free(curr->fdt[newfd]);
 	}
 
 	increase_dup_count(curr->fdt[oldfd]);
